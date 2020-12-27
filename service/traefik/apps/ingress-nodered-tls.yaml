@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodered-svc
+  labels:
+    app: wk-nodered
+spec:
+  ports:
+    - name: http
+      port: 1880
+      targetPort: http
+  selector:
+    app: wk-nodered
+  type: ClusterIP
+---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: nodered
+  labels:
+    app: wk-nodered  
+spec:
+  serviceName: nodered
+  selector:
+    matchLabels:
+      app: wk-nodered
+  replicas: 1
+  template:
+    metadata:
+      name: nodered
+      labels:
+        app: wk-nodered
+    spec:
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: nodered
+        image: nodered/node-red-docker:v10
+        ports:
+        - containerPort: 1880
+          name: http
+        volumeMounts:
+        - name: ingress-nodered-data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: ingress-nodered-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: nodered
+  labels:
+    app: nodered
+  annotations:
+    traefik.ingress.kubernetes.io/rewrite-target: /
+    traefik.ingress.kubernetes.io/router.entrypoints: https
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  rules:
+    - host: nodered.kps.com
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: nodered-svc
+              servicePort: http
+  tls:
+  - hosts:
+      - nodered.kps.com
+    secretName: tls-cert
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tls-cert
+type: kubernetes.io/tls
+data:
+  tls.crt: xxxxxxxx
+  tls.key: xxxxxxxx
+
